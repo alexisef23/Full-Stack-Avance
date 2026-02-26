@@ -1,76 +1,55 @@
 const ejerciciosRepo = require('../repositories/ejercicios.repository');
+const { validarEjercicio } = require('../domain/ejercicios.rules');
+const asyncHandler = require('../utils/asyncHandler');
 
-const getAllEjercicios = async (req, res) => {
-    try {
-        let { page, limit } = req.query;        
-        page = parseInt(page) || 1;
-        limit = parseInt(limit) || 10;
-        const offset = (page - 1) * limit;
-        const ejercicios = await ejerciciosRepo.findAll(limit, offset);        
-        res.json({
-            data: ejercicios,
-            pagination: {
-                currentPage: page,
-                itemsPerPage: limit,
-                totalItems: ejercicios.length 
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+const getAllEjercicios = asyncHandler(async (req, res) => {
+    let { page = 1, limit = 10 } = req.query;        
+    page = parseInt(page);
+    limit = parseInt(limit);
+    const offset = (page - 1) * limit;
+    const usuario_id = req.user.id;
 
-const createEjercicio = async (req, res) => {
-    try {
-        const { nombre, musculo, series, reps, peso } = req.body;
-        
-        if (!nombre || !musculo) {
-            return res.status(400).json({ message: "Nombre y músculo son obligatorios" });
+    const { data, total } = await ejerciciosRepo.findAllByUsuario(usuario_id, limit, offset);        
+    
+    res.json({
+        data,
+        pagination: {
+            currentPage: page,
+            itemsPerPage: limit,
+            totalItems: total,
+            totalPages: Math.ceil(total / limit)
         }
+    });
+});
 
-        const nuevo = await ejerciciosRepo.create({ nombre, musculo, series, reps, peso });
-        res.status(201).json({ message: `Ejercicio ${nombre} creado`, data: nuevo });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+const createEjercicio = asyncHandler(async (req, res) => {
+    const { nombre, musculo, series, reps, peso } = req.body;
+    const usuario_id = req.user.id;
+    validarEjercicio({ nombre, musculo, series, reps });
+
+    const nuevo = await ejerciciosRepo.create({ nombre, musculo, series, reps, peso, usuario_id });
+    res.status(201).json({ message: `Ejercicio ${nombre} creado`, data: nuevo });
+});
+
+const deleteEjercicio = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const usuario_id = req.user.id;
+
+    if (isNaN(id)) {
+        const err = new Error("ID inválido");
+        err.statusCode = 400;
+        throw err;
     }
-};
 
-const updateEjercicio = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { nombre, musculo, series, reps, peso } = req.body;
-        
-        if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+    const borrado = await ejerciciosRepo.deleteById(id, usuario_id);
 
-        const actualizado = await ejerciciosRepo.update(id, { nombre, musculo, series, reps, peso });
-        
-        if (!actualizado) return res.status(404).json({ message: "Ejercicio no encontrado" });
-        
-        res.json({ message: "Actualizado correctamente", data: actualizado });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    if (!borrado) {
+        const err = new Error("Ejercicio no encontrado o no autorizado para borrar");
+        err.statusCode = 404;
+        throw err;
     }
-};
 
-const deleteEjercicio = async (req, res) => {
-    try {
-        const { id } = req.params;
+    res.json({ message: "Eliminado correctamente" });
+});
 
-        if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
-
-        const borrado = await ejerciciosRepo.delete(id);
-
-        if (!borrado) return res.status(404).json({ message: "Ejercicio no encontrado" });
-
-        res.json({ message: "Eliminado correctamente" });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-module.exports = { 
-    getAllEjercicios, 
-    createEjercicio, 
-    updateEjercicio, 
-    deleteEjercicio 
-};
+module.exports = { getAllEjercicios, createEjercicio, deleteEjercicio };

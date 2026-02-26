@@ -1,37 +1,29 @@
 const pool = require('../config/db');
 
-class EjerciciosRepository {
-    async findAll(limit = 10, offset = 0) {
-        const query = 'SELECT * FROM ejercicios ORDER BY id ASC LIMIT $1 OFFSET $2';
-        const result = await pool.query(query, [limit, offset]);
-        return result.rows;
-    }
+const findAllByUsuario = async (usuario_id, limit, offset) => {
+    const query = 'SELECT * FROM ejercicios WHERE usuario_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3';
+    const result = await pool.query(query, [usuario_id, limit, offset]);
+    const countQuery = 'SELECT COUNT(*) FROM ejercicios WHERE usuario_id = $1';
+    const countResult = await pool.query(countQuery, [usuario_id]);
+    
+    return {
+        data: result.rows,
+        total: parseInt(countResult.rows[0].count)
+    };
+};
 
-    async create(ejercicio) {
-        const { nombre, musculo, series, reps, peso } = ejercicio;
-        const result = await pool.query(
-            'INSERT INTO ejercicios (nombre, musculo, series, reps, peso) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [nombre, musculo, series, reps, peso]
-        );
-        return result.rows[0];
-    }
+const create = async ({ nombre, musculo, series, reps, peso, usuario_id }) => {
+    const query = `
+        INSERT INTO ejercicios (nombre, musculo, series, reps, peso, usuario_id) 
+        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`;
+    const result = await pool.query(query, [nombre, musculo, series, reps, peso, usuario_id]);
+    return result.rows[0];
+};
 
-    async update(id, ejercicio) {
-        const { nombre, musculo, series, reps, peso } = ejercicio;
-        const query = `
-            UPDATE ejercicios 
-            SET nombre = $1, musculo = $2, series = $3, reps = $4, peso = $5 
-            WHERE id = $6 
-            RETURNING *`;
-        const values = [nombre, musculo, series, reps, peso, id];
-        const result = await pool.query(query, values);
-        return result.rows[0];
-    }
+const deleteById = async (id, usuario_id) => {
+    const query = 'DELETE FROM ejercicios WHERE id = $1 AND usuario_id = $2 RETURNING *';
+    const result = await pool.query(query, [id, usuario_id]);
+    return result.rowCount > 0;
+};
 
-    async delete(id) {
-        const result = await pool.query('DELETE FROM ejercicios WHERE id = $1 RETURNING *', [id]);
-        return result.rowCount > 0;
-    }
-}
-
-module.exports = new EjerciciosRepository();
+module.exports = { findAllByUsuario, create, deleteById };
